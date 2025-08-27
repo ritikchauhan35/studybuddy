@@ -59,7 +59,7 @@ export const useWebSocketMatching = (): UseWebSocketMatchingReturn => {
     setIsMatching(true);
     
     sendWsMessage({
-      type: 'find_match',
+      type: 'join_queue',
       payload: { user }
     });
   }, [sendWsMessage]);
@@ -71,7 +71,7 @@ export const useWebSocketMatching = (): UseWebSocketMatchingReturn => {
     // No need to send a message to the server if we're not connected
     if (isConnected) {
       sendWsMessage({
-        type: 'cancel_match',
+        type: 'leave_queue',
         payload: {}
       });
     }

@@ -102,6 +102,28 @@ const addToQueue = async (user) => {
   }
 };
 
+const removeFromQueue = async (userId) => {
+  if (useRedis) {
+    // Get all users from Redis queue
+    const queueLength = await redisClient.lLen('matchingQueue');
+    for (let i = 0; i < queueLength; i++) {
+      const user = await redisClient.rPop('matchingQueue');
+      const parsedUser = JSON.parse(user);
+      
+      // If not the user we want to remove, push back to queue
+      if (parsedUser.id !== userId) {
+        await redisClient.lPush('matchingQueue', user);
+      }
+    }
+  } else {
+    // Fallback to memory store
+    const index = memoryStore.queue.findIndex(user => user.id === userId);
+    if (index !== -1) {
+      memoryStore.queue.splice(index, 1);
+    }
+  }
+};
+
 const getFromQueue = async () => {
   if (useRedis) {
     const user = await redisClient.rPop('matchingQueue');
@@ -296,8 +318,12 @@ const handleWebSocketMessage = async (clientId, message) => {
   if (!client) return;
 
   switch (message.type) {
-    case 'find_match':
+    case 'join_queue':
       await handleJoinQueue(clientId, message.payload);
+      break;
+      
+    case 'leave_queue':
+      await handleLeaveQueue(clientId);
       break;
       
     case 'chat_message':
@@ -393,6 +419,22 @@ const handleJoinQueue = async (clientId, payload) => {
       }
     }, 60000); // 60 second timeout
   }
+};
+
+const handleLeaveQueue = async (clientId) => {
+  const client = clients.get(clientId);
+  if (!client || !client.userId) return;
+
+  console.log(`User ${client.userId} left matching queue`);
+  
+  // Remove from queue
+  await removeFromQueue(client.userId);
+  
+  // Confirm to client
+  client.ws.send(JSON.stringify({
+    type: 'queue_left',
+    payload: { success: true }
+  }));
 };
 
 const handleChatMessage = async (clientId, payload) => {
